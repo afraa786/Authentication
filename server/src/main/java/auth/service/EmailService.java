@@ -32,8 +32,8 @@ public class EmailService {
         sendVerificationEmail(to, "OTP Notification", body);
     }
 
-    public void sendPasswordResetEmail(String to, String token) {
-        String body = "To reset your password use this token: " + token;
-        sendVerificationEmail(to, "Password Reset", body);
+    public void sendPasswordResetEmail(String to, String otp) {
+        String body = "Your password reset code is: " + otp + " (valid for 10 minutes).";
+        sendVerificationEmail(to, "Password Reset Code", body);
     }
 }

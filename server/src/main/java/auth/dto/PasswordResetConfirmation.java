@@ -8,7 +8,7 @@ import lombok.*;
 @Getter
 @Setter
 public class PasswordResetConfirmation {
-    private String token;
+    private String otp;
     private String newPassword;
 
 

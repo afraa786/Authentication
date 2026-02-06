@@ -87,14 +87,27 @@
             emailService.sendOtpEmail(newUser.getEmail(), otp, "registration_otp.html");
         }
 
-        // ---------------- VERIFY OTP / ACTIVATE (by userId) ----------------
-        public void updateUserOtp(Long userId, OtpUpdateRequest request) {
+        // ---------------- VERIFY OTP / ACTIVATE (by userId or email) ----------------
+        public void updateUserOtp(String userIdOrEmail, OtpUpdateRequest request) {
             if (request == null || request.getOtp() == null) {
                 throw new IllegalArgumentException("OTP is required");
             }
 
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new IllegalArgumentException("User not found"));
+            // Try to find user by ID first (if numeric), then by email
+            User user = null;
+            try {
+                Long userId = Long.parseLong(userIdOrEmail);
+                user = userRepository.findById(userId)
+                        .orElse(null);
+            } catch (NumberFormatException e) {
+                // Not a number, treat as email
+                user = userRepository.findByEmail(userIdOrEmail)
+                        .orElse(null);
+            }
+
+            if (user == null) {
+                throw new IllegalArgumentException("User not found");
+            }
 
             if (user.isActive()) {
                 throw new IllegalArgumentException("User already active");
@@ -152,12 +165,12 @@
 
         // ---------------- LOGIN ----------------
         public LoginResponse loginUser(LoginRequest request) {
-            if ((request.getUsername() == null || request.getUsername().isBlank()) || request.getPassword() == null) {
-                throw new IllegalArgumentException("Username and password required");
+            if ((request.getEmail() == null || request.getEmail().isBlank()) || request.getPassword() == null) {
+                throw new IllegalArgumentException("Email and password required");
             }
 
-            User user = userRepository.findByUsername(request.getUsername())
-                    .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
+            User user = userRepository.findByEmail(request.getEmail())
+                    .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
 
             if (!user.isActive()) {
                 throw new IllegalArgumentException("User not verified");
@@ -199,23 +212,24 @@
             User user = userRepository.findByEmail(request.getEmail())
                     .orElseThrow(() -> new IllegalArgumentException("Email not found"));
 
-            String token = UUID.randomUUID().toString();
-            user.setResetToken(token);
+            // generate a 4-digit numeric OTP for password reset
+            String otp = generate4DigitOtp();
+            user.setResetToken(otp);
             user.setResetTokenExpiry(LocalDateTime.now().plusMinutes(10));
 
             userRepository.save(user);
 
-            emailService.sendPasswordResetEmail(user.getEmail(), token);
+            emailService.sendPasswordResetEmail(user.getEmail(), otp);
         }
 
         // ---------------- PASSWORD RESET (verify token and set new password) ----------------
         public void resetPassword(PasswordResetConfirmation request) {
-            if (request == null || request.getToken() == null || request.getNewPassword() == null) {
-                throw new IllegalArgumentException("Token and new password required");
+            if (request == null || request.getOtp() == null || request.getNewPassword() == null) {
+                throw new IllegalArgumentException("OTP and new password required");
             }
 
-            User user = userRepository.findByResetToken(request.getToken())
-                    .orElseThrow(() -> new IllegalArgumentException("Invalid or expired token"));
+            User user = userRepository.findByResetToken(request.getOtp())
+                    .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP"));
 
             if (user.getResetTokenExpiry() == null || user.getResetTokenExpiry().isBefore(LocalDateTime.now())) {
                 throw new IllegalArgumentException("Reset token expired");

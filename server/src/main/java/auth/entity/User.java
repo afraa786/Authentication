@@ -29,6 +29,7 @@ public class User implements UserDetails {
 
     private String password;
 
+    @Builder.Default
     private boolean active = false;
     private String otp;
 
@@ -38,7 +39,9 @@ public class User implements UserDetails {
 
     private LocalDateTime resetTokenExpiry;
 
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+    @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
 
     @Override

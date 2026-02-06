@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 
 import java.util.List;
+import java.util.Map;
 
 @RequiredArgsConstructor
 @RestController
@@ -32,10 +33,11 @@ public class userController {
     }
 
     // ------------------ Verify / Update OTP ------------------
-    @PutMapping("/otp/{userId}")
+    @PutMapping("/otp/{userIdOrEmail}")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public void updateUserOtp(@PathVariable Long userId, @RequestBody OtpUpdateRequest request) {
-        userService.updateUserOtp(userId, request);
+    public Map<String, String> updateUserOtp(@PathVariable String userIdOrEmail, @RequestBody OtpUpdateRequest request) {
+        userService.updateUserOtp(userIdOrEmail, request);
+        return Map.of("message", "Email verified successfully");
     }
 
     @PostMapping("/login")
@@ -54,14 +56,16 @@ public class userController {
     // ------------------ Request Password Reset ------------------
     @PostMapping("/password-reset-request")
     @ResponseStatus(HttpStatus.OK)
-    public void requestPasswordReset(@RequestBody PasswordResetRequest request) {
+    public Map<String, String> requestPasswordReset(@RequestBody PasswordResetRequest request) {
         userService.requestPasswordReset(request);
+        return Map.of("message", "Password reset code sent to your email");
     }
 
     // ------------------ Reset Password ------------------
     @PostMapping("/password-reset")
     @ResponseStatus(HttpStatus.OK)
-    public void resetPassword(@RequestBody PasswordResetConfirmation request) {
+    public Map<String, String> resetPassword(@RequestBody PasswordResetConfirmation request) {
         userService.resetPassword(request);
+        return Map.of("message", "Password reset successfully");
     }
 }
