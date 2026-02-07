@@ -5,7 +5,7 @@ import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 
@@ -31,18 +31,28 @@ public class User implements UserDetails {
 
     @Builder.Default
     private boolean active = false;
+
     private String otp;
 
-    private LocalDateTime otpGeneratedAt;
+    // 🔥 FIXED (was Instant
+
+    private Instant otpGeneratedAt;
 
     private String resetToken;
 
-    private LocalDateTime resetTokenExpiry;
+    
+    private Instant resetTokenExpiry;
+
+    // These are fine to keep as Instant too (recommended)
+    @Builder.Default
+    private Instant createdAt = Instant.now();
 
     @Builder.Default
-    private LocalDateTime createdAt = LocalDateTime.now();
-    @Builder.Default
-    private LocalDateTime updatedAt = LocalDateTime.now();
+    private Instant updatedAt = Instant.now();
+
+    // ===============================
+    // Spring Security
+    // ===============================
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -50,21 +60,32 @@ public class User implements UserDetails {
     }
 
     @Override
-    public String getPassword() { return password; }
+    public String getPassword() {
+        return password;
+    }
 
     @Override
-    public String getUsername() { return email; } // login by email
+    public String getUsername() {
+        return email; // login by email
+    }
 
     @Override
-    public boolean isAccountNonExpired() { return true; }
+    public boolean isAccountNonExpired() {
+        return true;
+    }
 
     @Override
-    public boolean isAccountNonLocked() { return true; }
+    public boolean isAccountNonLocked() {
+        return true;
+    }
 
     @Override
-    public boolean isCredentialsNonExpired() { return true; }
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
 
     @Override
-    public boolean isEnabled() { return active; }
+    public boolean isEnabled() {
+        return active;
+    }
 }
-    
