@@ -1,14 +1,13 @@
 package auth.controller;
 
 import auth.dto.*;
-import auth.entity.*;
+import auth.service.JwtService;
 import auth.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 
 @RequiredArgsConstructor
@@ -17,89 +16,125 @@ import java.util.Map;
 public class userController {
 
     private final UserService userService;
+    private final JwtService jwtService;
 
-    // ------------------ Register User ------------------
+    // ================= REGISTER =================
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    public void registerUser(@RequestBody UserRegistrationRequest request) {
+    public Map<String, String> register(
+            @RequestBody UserRegistrationRequest request) {
+
         userService.registerUser(request);
+
+        return Map.of(
+                "message",
+                "Registration successful. Please verify the OTP sent to your email."
+        );
     }
 
-    // ------------------ Get All Users ------------------
-    @GetMapping("/all")
-    @ResponseStatus(HttpStatus.OK)
-    public List<User> getAllUsers() {
-        return userService.getAllUsers();
+    // ================= VERIFY EMAIL =================
+    @PostMapping("/verify-email")
+    public Map<String, String> verifyEmail(
+            @RequestBody OtpUpdateRequest request) {
+
+        userService.verifyEmail(request);
+
+        return Map.of("message", "Email verified successfully. You can now login.");
     }
 
-    // ------------------ Verify / Update OTP ------------------
-    @PutMapping("/otp/{userIdOrEmail}")
-    @ResponseStatus(HttpStatus.ACCEPTED)
-    public Map<String, String> updateUserOtp(
-            @PathVariable String userIdOrEmail,
-            @RequestBody OtpUpdateRequest request
-    ) {
-        userService.updateUserOtp(userIdOrEmail, request);
-        return Map.of("message", "Email verified successfully");
-    }
+    // ================= SEND EMAIL VERIFICATION OTP =================
+@PostMapping("/send-verification-otp")
+public Map<String, String> sendVerificationOtp(
+        @RequestBody PasswordResetRequest request) {
 
-    // ------------------ LOGIN (FIXED) ------------------
+    userService.sendEmailVerificationOtp(request.getEmail());
+
+    return Map.of("message", "OTP sent to your email for verification.");
+}
+
+
+    // ================= LOGIN =================
     @PostMapping("/login")
-    public ResponseEntity<?> loginUser(@RequestBody LoginRequest request) {
-        try {
-            LoginResponse response = userService.loginUser(request);
-            return ResponseEntity.ok(response);
+    public ResponseEntity<?> login(
+            @RequestBody LoginRequest request) {
 
+        try {
+            return ResponseEntity.ok(userService.loginUser(request));
         } catch (IllegalStateException ex) {
 
-            // ✅ THIS IS THE IMPORTANT PART
-            if ("OTP_REQUIRED".equals(ex.getMessage())) {
-                return ResponseEntity
-                        .status(HttpStatus.FORBIDDEN)
+            if ("EMAIL_NOT_VERIFIED".equals(ex.getMessage())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(Map.of(
-                                "error", "OTP_REQUIRED",
-                                "message", "Account not verified. OTP sent to email."
+                                "error", "EMAIL_NOT_VERIFIED",
+                                "message", "Please verify your email before logging in."
                         ));
             }
 
-            throw ex; // any other IllegalStateException
+            throw ex;
         }
     }
 
-    // ------------------ Delete User ------------------
-    @DeleteMapping("/delete/{userId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteUser(@PathVariable Long userId) {
-        userService.deleteUser(userId);
-    }
-
-    // ------------------ Request Password Reset ------------------
+    // ================= PASSWORD RESET REQUEST =================
     @PostMapping("/password-reset-request")
     @ResponseStatus(HttpStatus.OK)
     public Map<String, String> requestPasswordReset(
-            @RequestBody PasswordResetRequest request
-    ) {
+            @RequestBody PasswordResetRequest request) {
+
         userService.requestPasswordReset(request);
-        return Map.of("message", "Password reset code sent to your email");
+
+        return Map.of("message", "Password reset OTP sent to your email.");
     }
 
-    // ------------------ LOGIN WITH OTP ------------------
-    @PostMapping("/login/otp")
-    public ResponseEntity<LoginResponse> loginWithOtp(
-            @RequestBody OtpLoginRequest request) {
-
-        LoginResponse response = userService.loginWithOtp(request);
-        return ResponseEntity.ok(response);
-    }
-
-
-    // ------------------ Reset Password ------------------
+    // ================= PASSWORD RESET =================
     @PostMapping("/password-reset")
     @ResponseStatus(HttpStatus.OK)
     public Map<String, String> resetPassword(
-            @RequestBody PasswordResetConfirmation request
-    ) {
+            @RequestBody PasswordResetConfirmation request) {
+
         userService.resetPassword(request);
-        return Map.of("message", "Password reset successfully");
+
+        return Map.of("message", "Password reset successfully.");
+    }
+
+    // ================= RESEND OTP =================
+    @PostMapping("/resend-otp")
+    public Map<String, String> resendOtp(@RequestBody ResendOtpRequest request) {
+        userService.resendOtp(request);
+        return Map.of("message", "OTP resent successfully.");
+    }
+
+    // ================= ADMIN UTIL =================
+    @GetMapping("/all")
+    public java.util.List<UserDto> getAllUsers() {
+        return userService.getAllUsers();
+    }
+
+    @DeleteMapping("/delete/{id}")
+    public Map<String, String> deleteUser(@PathVariable("id") Long id) {
+        userService.deleteUserById(id);
+        return Map.of("message", "User deleted.");
+    }
+
+    @PutMapping("/update-username")
+    public Map<String, String> updateUsername(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestBody UpdateUsernameRequest request
+    ) {
+        String email = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            try {
+                email = jwtService.extractUsername(token);
+            } catch (Exception ex) {
+                // ignore and let service throw if email null
+            }
+        }
+
+        if (email == null) {
+            throw new IllegalArgumentException("Missing or invalid token");
+        }
+
+        userService.updateUsernameByEmail(email, request);
+        return Map.of("message", "Username updated successfully.");
     }
 }

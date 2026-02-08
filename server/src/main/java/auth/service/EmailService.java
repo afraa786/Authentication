@@ -22,7 +22,6 @@ public class EmailService {
 
             emailSender.send(message);
         } catch (Exception e) {
-            // swallow or log in real app
         }
     }
 

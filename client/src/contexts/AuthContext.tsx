@@ -4,7 +4,7 @@ interface AuthContextType {
   token: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
-  login: (token: string, refreshToken: string) => void;
+  login: (token: string, refreshToken?: string | null) => void;
   logout: () => void;
 }
 
@@ -18,11 +18,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     () => localStorage.getItem('refresh_token')
   );
 
-  const login = useCallback((newToken: string, newRefreshToken: string) => {
+  const login = useCallback((newToken: string, newRefreshToken?: string | null) => {
     setToken(newToken);
-    setRefreshToken(newRefreshToken);
+    setRefreshToken(newRefreshToken || null);
     localStorage.setItem('auth_token', newToken);
-    localStorage.setItem('refresh_token', newRefreshToken);
+    if (newRefreshToken) {
+      localStorage.setItem('refresh_token', newRefreshToken);
+    } else {
+      localStorage.removeItem('refresh_token');
+    }
   }, []);
 
   const logout = useCallback(() => {

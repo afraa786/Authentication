@@ -10,6 +10,4 @@ import lombok.*;
 public class ResendOtpRequest {
     private String email;
 
-
-
 }

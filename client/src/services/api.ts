@@ -1,6 +1,6 @@
-// Default to backend running on localhost:8080 in development.
+// Default to backend running on localhost:9090 in development.
 // Override with VITE_API_BASE_URL when building or running in other environments.
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/authentication';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9090/api/authentication';
 
 export class ApiError extends Error {
   status: number;
@@ -60,23 +60,26 @@ async function request<T = unknown>(
 
 export interface LoginResponse {
   token: string;
-  refreshToken: string;
+  userId?: number;
+  email?: string;
+  username?: string;
   [key: string]: unknown;
 }
 
 export interface UserInfo {
-  id: string;
+  id: number;
   username: string;
   email: string;
   [key: string]: unknown;
 }
 
 export const authApi = {
-  register: (data: { username: string; email: string; password: string }) =>
+  register: (data: { username: string; email: string; password: string; confirmPassword: string }) =>
     request('/register', { method: 'POST', body: JSON.stringify(data) }),
 
-  verifyOtp: (userId: string, otp: string) =>
-    request(`/otp/${userId}`, { method: 'PUT', body: JSON.stringify({ otp }) }),
+  // backend expects { email, otp } on POST /verify-email
+  verifyOtp: (email: string, otp: string) =>
+    request('/verify-email', { method: 'POST', body: JSON.stringify({ email, otp }) }),
 
   resendOtp: (data: { email: string }) =>
     request('/resend-otp', { method: 'POST', body: JSON.stringify(data) }),

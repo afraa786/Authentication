@@ -8,12 +8,12 @@ import lombok.*;
 @Getter
 @Setter
 @Builder
+
 public class LoginResponse {
     private String token;
     private Long userId;
     private String email;
     private String username;
-
 
 
 }

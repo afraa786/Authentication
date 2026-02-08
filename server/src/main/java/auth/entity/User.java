@@ -27,27 +27,32 @@ public class User implements UserDetails {
     @Column(nullable = false, unique = true)
     private String email;
 
+    @Column(nullable = false)
     private String password;
 
     @Builder.Default
+    @Column(nullable = false)
     private boolean active = false;
 
+    @Column(name = "otp")
     private String otp;
 
-    // 🔥 FIXED (was Instant
-
+    @Column(name = "otp_generated_at")
     private Instant otpGeneratedAt;
 
+    // 🔥 THIS WAS THE MAIN BUG
+    @Column(name = "reset_token")
     private String resetToken;
 
-    
+    @Column(name = "reset_token_expiry")
     private Instant resetTokenExpiry;
 
-    // These are fine to keep as Instant too (recommended)
     @Builder.Default
+    @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
     @Builder.Default
+    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
     // ===============================
@@ -57,11 +62,6 @@ public class User implements UserDetails {
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return Collections.emptyList();
-    }
-
-    @Override
-    public String getPassword() {
-        return password;
     }
 
     @Override

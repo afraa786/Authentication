@@ -55,6 +55,7 @@ const Register = () => {
         username: data.username,
         email: data.email,
         password: data.password,
+        confirmPassword: data.confirmPassword,
       });
       toast.success('Account created! Please verify your email.');
       navigate('/verify-otp', { state: { email: data.email } });

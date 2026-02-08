@@ -3,44 +3,35 @@ package auth.service;
 import auth.dto.*;
 import auth.entity.User;
 import auth.repository.UserRepository;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class UserService implements UserDetailsService {
+public class UserService implements org.springframework.security.core.userdetails.UserDetailsService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final JwtService jwtService;
 
-    private final Set<String> tokenBlacklist = ConcurrentHashMap.newKeySet();
+    // OTP validity: 5 minutes
+    private static final long OTP_VALIDITY_SECONDS = 300;
 
-    private static final long OTP_VALIDITY_SECONDS = 600; // 10 minutes
-
-    @Value("${app.auth.jwt.secret:very-secret-key-change-me}")
-    private String jwtSecret;
-
-    @Value("${app.auth.jwt.expiration-ms:86400000}")
-    private long jwtExpirationMs;
-
+    // ================= USER DETAILS =================
     @Override
-    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+    public org.springframework.security.core.userdetails.UserDetails loadUserByUsername(String email)
+            throws org.springframework.security.core.userdetails.UsernameNotFoundException {
+
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+                .orElseThrow(() ->
+                        new org.springframework.security.core.userdetails.UsernameNotFoundException("User not found"));
     }
 
     // ================= REGISTER =================
@@ -61,43 +52,44 @@ public class UserService implements UserDetailsService {
 
         userRepository.save(user);
 
-        emailService.sendOtpEmail(user.getEmail(), otp, "registration_otp.html");
+        emailService.sendOtpEmail(
+                user.getEmail(),
+                otp,
+                "registration_otp.html"
+        );
     }
 
-    // ================= LOGIN =================
-    public LoginResponse loginUser(LoginRequest request) {
+    // ================= SEND EMAIL VERIFICATION OTP =================
+    public void sendEmailVerificationOtp(String email) {
 
-        if (request.getEmail() == null || request.getPassword() == null) {
-            throw new IllegalArgumentException("Email and password required");
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (user.isActive()) {
+            throw new IllegalStateException("Email already verified");
         }
 
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
+        String otp = generate4DigitOtp();
+        user.setOtp(otp);
+        user.setOtpGeneratedAt(Instant.now());
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new IllegalArgumentException("Invalid email or password");
-        }
+        userRepository.save(user);
 
-        if (!user.isActive()) {
-            generateOtpIfMissing(user, "login_verification_otp.html");
-            throw new IllegalStateException("OTP_REQUIRED");
-        }
-
-        return buildLoginResponse(user);
+        emailService.sendOtpEmail(
+                user.getEmail(),
+                otp,
+                "email_verification_otp.html"
+        );
     }
 
-    // ================= LOGIN WITH OTP =================
-    public LoginResponse loginWithOtp(OtpLoginRequest request) {
-
-        if (request.getEmail() == null || request.getOtp() == null) {
-            throw new IllegalArgumentException("Email and OTP required");
-        }
+    // ================= VERIFY EMAIL =================
+    public void verifyEmail(OtpUpdateRequest request) {
 
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         if (user.isActive()) {
-            throw new IllegalStateException("User already active");
+            throw new IllegalStateException("Email already verified");
         }
 
         validateOtp(user, request.getOtp());
@@ -105,47 +97,25 @@ public class UserService implements UserDetailsService {
         user.setActive(true);
         user.setOtp(null);
         user.setOtpGeneratedAt(null);
+
         userRepository.save(user);
+    }
+
+    // ================= LOGIN =================
+    public LoginResponse loginUser(LoginRequest request) {
+
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("Invalid credentials");
+        }
+
+        if (!user.isActive()) {
+            throw new IllegalStateException("EMAIL_NOT_VERIFIED");
+        }
 
         return buildLoginResponse(user);
-    }
-
-    // ================= OTP HELPERS =================
-    private void generateOtpIfMissing(User user, String template) {
-
-        if (user.getOtp() != null &&
-            user.getOtpGeneratedAt() != null &&
-            user.getOtpGeneratedAt()
-                    .plusSeconds(OTP_VALIDITY_SECONDS)
-                    .isAfter(Instant.now())) {
-
-            // OTP already valid → do NOT regenerate
-            return;
-        }
-
-        String otp = generate4DigitOtp();
-        user.setOtp(otp);
-        user.setOtpGeneratedAt(Instant.now());
-        userRepository.save(user);
-
-        emailService.sendOtpEmail(user.getEmail(), otp, template);
-    }
-
-    private void validateOtp(User user, String requestOtp) {
-
-        if (user.getOtp() == null || user.getOtpGeneratedAt() == null) {
-            throw new IllegalArgumentException("OTP not found");
-        }
-
-        if (user.getOtpGeneratedAt()
-                .plusSeconds(OTP_VALIDITY_SECONDS)
-                .isBefore(Instant.now())) {
-            throw new IllegalArgumentException("OTP expired");
-        }
-
-        if (!user.getOtp().equals(requestOtp.trim())) {
-            throw new IllegalArgumentException("Invalid OTP");
-        }
     }
 
     // ================= PASSWORD RESET =================
@@ -156,9 +126,9 @@ public class UserService implements UserDetailsService {
 
         String otp = generate4DigitOtp();
         user.setResetToken(otp);
-        user.setResetTokenExpiry(Instant.now().plusSeconds(OTP_VALIDITY_SECONDS));
-        userRepository.save(user);
+        user.setResetTokenExpiry(Instant.now().plusSeconds(600));
 
+        userRepository.save(user);
         emailService.sendPasswordResetEmail(user.getEmail(), otp);
     }
 
@@ -174,53 +144,120 @@ public class UserService implements UserDetailsService {
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setResetToken(null);
         user.setResetTokenExpiry(null);
+
         userRepository.save(user);
     }
 
-    // ================= HELPERS =================
+    // ================= JWT =================
     private LoginResponse buildLoginResponse(User user) {
-        String jwt = generateJwtToken(user);
+
+        String token = jwtService.generateToken(user);
+
         return LoginResponse.builder()
-                .token(jwt)
+                .token(token)
                 .userId(user.getId())
                 .email(user.getEmail())
                 .username(user.getUsername())
                 .build();
     }
 
-    private void validateRegistration(UserRegistrationRequest request) {
-        if (request.getEmail() == null ||
-            request.getUsername() == null ||
-            request.getPassword() == null ||
-            request.getConfirmPassword() == null) {
-            throw new IllegalArgumentException("All fields are required");
+    // ================= OTP VALIDATION =================
+    private void validateOtp(User user, String requestOtp) {
+
+        if (requestOtp == null || requestOtp.trim().isEmpty()) {
+            throw new IllegalArgumentException("OTP is required");
         }
+
+        if (user.getOtp() == null || user.getOtpGeneratedAt() == null) {
+            throw new IllegalStateException("No OTP found. Please request a new OTP.");
+        }
+
+        if (!requestOtp.trim().equals(user.getOtp())) {
+            throw new IllegalArgumentException("Invalid OTP");
+        }
+
+        if (user.getOtpGeneratedAt()
+                .plusSeconds(OTP_VALIDITY_SECONDS)
+                .isBefore(Instant.now())) {
+
+            user.setOtp(null);
+            user.setOtpGeneratedAt(null);
+            userRepository.save(user);
+
+            throw new IllegalArgumentException("OTP has expired");
+        }
+    }
+
+    // ================= REGISTRATION VALIDATION =================
+    private void validateRegistration(UserRegistrationRequest request) {
+
+        if (request.getEmail() == null ||
+                request.getUsername() == null ||
+                request.getPassword() == null ||
+                request.getConfirmPassword() == null) {
+            throw new IllegalArgumentException("All fields required");
+        }
+
         if (!request.getPassword().equals(request.getConfirmPassword())) {
             throw new IllegalArgumentException("Passwords do not match");
         }
+
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new IllegalArgumentException("Email already exists");
         }
+
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
             throw new IllegalArgumentException("Username already exists");
         }
     }
 
+    // ================= OTP GENERATOR =================
     private String generate4DigitOtp() {
         return String.valueOf(new Random().nextInt(9000) + 1000);
     }
 
-    private String generateJwtToken(User user) {
-        Date now = new Date();
-        Date expiry = new Date(now.getTime() + jwtExpirationMs);
+    // ================= RESEND OTP =================
+    public void resendOtp(ResendOtpRequest request) {
 
-        return Jwts.builder()
-                .setSubject(String.valueOf(user.getId()))
-                .claim("email", user.getEmail())
-                .claim("username", user.getUsername())
-                .setIssuedAt(now)
-                .setExpiration(expiry)
-                .signWith(SignatureAlgorithm.HS256, jwtSecret.getBytes())
-                .compact();
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new IllegalArgumentException("Email not found"));
+
+        String otp = generate4DigitOtp();
+        user.setOtp(otp);
+        user.setOtpGeneratedAt(Instant.now());
+
+        userRepository.save(user);
+        emailService.sendOtpEmail(user.getEmail(), otp, "registration_otp.html");
+    }
+
+    // ================= ADMIN / UTIL =================
+    public List<UserDto> getAllUsers() {
+
+        List<UserDto> dtos = new ArrayList<>();
+        for (User u : userRepository.findAll()) {
+            dtos.add(UserDto.builder()
+                    .id(u.getId())
+                    .username(u.getUsername())
+                    .email(u.getEmail())
+                    .build());
+        }
+        return dtos;
+    }
+
+    public void deleteUserById(Long id) {
+        userRepository.deleteById(id);
+    }
+
+    public void updateUsernameByEmail(String email, UpdateUsernameRequest request) {
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (userRepository.findByUsername(request.getUsername()).isPresent()) {
+            throw new IllegalArgumentException("Username already exists");
+        }
+
+        user.setUsername(request.getUsername());
+        userRepository.save(user);
     }
 }
