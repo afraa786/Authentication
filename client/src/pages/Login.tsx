@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import { Loader2, Mail, Lock } from 'lucide-react';
+import { Loader2, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -25,6 +25,7 @@ const Login = () => {
   const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [catMode, setCatMode] = useState<CatMode>('idle');
+  const [showPassword, setShowPassword] = useState(false);
   const blurTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const {
@@ -44,6 +45,10 @@ const Login = () => {
     blurTimer.current = setTimeout(() => setCatMode('idle'), 120);
   }, []);
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   const emailField = register('email');
   const passwordField = register('password');
 
@@ -54,7 +59,7 @@ const Login = () => {
         email: data.email,
         password: data.password,
       });
-      login(response.token, response.refreshToken);
+      login(response.token as string, response.refreshToken as string);
       toast.success('Welcome back!');
       navigate('/dashboard');
     } catch (error) {
@@ -143,9 +148,9 @@ const Login = () => {
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
-                  className="auth-input pl-10"
+                  className="auth-input pl-10 pr-10"
                   {...passwordField}
                   onFocus={() => handleFocus('password')}
                   onBlur={(e) => {
@@ -153,6 +158,18 @@ const Login = () => {
                     handleBlur();
                   }}
                 />
+                <button
+                  type="button"
+                  onClick={togglePasswordVisibility}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
               </div>
               {errors.password && (
                 <p className="auth-error">{errors.password.message}</p>
