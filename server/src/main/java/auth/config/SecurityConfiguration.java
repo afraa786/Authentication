@@ -32,7 +32,15 @@ public class SecurityConfiguration {
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/authentication/**").permitAll()
+                .requestMatchers(
+                    "/api/authentication/register",
+                    "/api/authentication/verify-email",
+                    "/api/authentication/send-verification-otp",
+                    "/api/authentication/login",
+                    "/api/authentication/password-reset-request",
+                    "/api/authentication/password-reset",
+                    "/api/authentication/resend-otp"
+                ).permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(

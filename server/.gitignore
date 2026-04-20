@@ -30,4 +30,8 @@ build/
 
 ### VS Code ###
 .vscode/
-*.properties
+
+# Secrets — never commit real credentials
+.env
+.env.local
+src/main/resources/application.properties

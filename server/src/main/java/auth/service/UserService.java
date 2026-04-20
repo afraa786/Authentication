@@ -8,6 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.*;
 
@@ -21,8 +22,8 @@ public class UserService implements org.springframework.security.core.userdetail
     private final EmailService emailService;
     private final JwtService jwtService;
 
-    // OTP validity: 5 minutes
     private static final long OTP_VALIDITY_SECONDS = 300;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     // ================= USER DETAILS =================
     @Override
@@ -213,7 +214,7 @@ public class UserService implements org.springframework.security.core.userdetail
 
     // ================= OTP GENERATOR =================
     private String generate4DigitOtp() {
-        return String.valueOf(new Random().nextInt(9000) + 1000);
+        return String.valueOf(SECURE_RANDOM.nextInt(9000) + 1000);
     }
 
     // ================= RESEND OTP =================
