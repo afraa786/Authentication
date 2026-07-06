@@ -1,7 +1,1 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://authentication-vi22.onrender.com/api/authentication/all)"
-    ]
-  }
-}
+
